@@ -13,7 +13,7 @@ const modeFile = "./lib/mode.json"
 
 let prefix = "."
 let mode = "public"
-const owner = "263785858294@s.whatsapp.net" // 🔥 PUT YOUR NUMBER
+const owner = process.env.OWNER || "263785858294@s.whatsapp.net"
 
 function loadConfig() {
   try {
@@ -82,7 +82,12 @@ async function startBot() {
 
     loadConfig()
 
-    const plugins = loadPlugins()
+    let plugins = []
+try {
+  plugins = loadPlugins()
+} catch (e) {
+  console.log("Plugin load error:", e)
+}
     const plugin = plugins.find(p => p.command === cmd)
 
     if (!plugin) return
