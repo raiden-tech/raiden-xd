@@ -13,7 +13,12 @@ const modeFile = "./lib/mode.json"
 
 let prefix = "."
 let mode = "public"
+
+// ✅ OWNER FROM ENV
 const owner = process.env.OWNER || "263785858294@s.whatsapp.net"
+
+// ✅ NUMBER FOR PAIRING
+const number = process.env.NUMBER
 
 function loadConfig() {
   try {
@@ -28,7 +33,6 @@ function loadConfig() {
 loadConfig()
 
 async function startBot() {
-
   const { state, saveCreds } = await useMultiFileAuthState("./session")
 
   const sock = makeWASocket({
@@ -41,16 +45,27 @@ async function startBot() {
 
   console.log("🤖 LYNXGOD BOT STARTED")
 
+  // 🔥 PAIRING CODE SYSTEM (FOR RENDER)
+  if (!sock.authState.creds.registered && number) {
+    try {
+      const code = await sock.requestPairingCode(number)
+      console.log("🔗 Pairing Code:", code)
+    } catch (e) {
+      console.log("Pairing Error:", e)
+    }
+  }
+
   // 🔥 CONNECTION HANDLER
   sock.ev.on("connection.update", ({ connection, lastDisconnect }) => {
-
     if (connection === "close") {
-      const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
+      const code = lastDisconnect?.error?.output?.statusCode
+      const shouldReconnect = code !== DisconnectReason.loggedOut
 
-      console.log("❌ Disconnected. Reconnecting...", shouldReconnect)
+      console.log("❌ Disconnected:", code)
 
-      if (shouldReconnect) startBot()
+      if (shouldReconnect) {
+        setTimeout(() => startBot(), 5000) // ⏳ prevent spam loop
+      }
     }
 
     if (connection === "open") {
@@ -60,11 +75,8 @@ async function startBot() {
 
   // 🔥 MESSAGE HANDLER
   sock.ev.on("messages.upsert", async ({ messages }) => {
-
     const msg = messages[0]
     if (!msg.message) return
-
-    // ❌ ignore self messages
     if (msg.key.fromMe) return
 
     const jid = msg.key.remoteJid
@@ -83,13 +95,13 @@ async function startBot() {
     loadConfig()
 
     let plugins = []
-try {
-  plugins = loadPlugins()
-} catch (e) {
-  console.log("Plugin load error:", e)
-}
-    const plugin = plugins.find(p => p.command === cmd)
+    try {
+      plugins = loadPlugins()
+    } catch (e) {
+      console.log("Plugin load error:", e)
+    }
 
+    const plugin = plugins.find(p => p.command === cmd)
     if (!plugin) return
 
     // 🔐 PRIVATE MODE
@@ -99,7 +111,7 @@ try {
       })
     }
 
-    // 🔐 OWNER COMMAND PROTECTION
+    // 🔐 OWNER COMMAND
     if (plugin.category === "owner" && sender !== owner) {
       return sock.sendMessage(jid, {
         text: "🚫 Owner only command"
@@ -118,4 +130,7 @@ try {
   })
 }
 
-startBot()
+// ✅ SAFE START
+startBot().catch(err => {
+  console.log("Fatal Error:", err)
+})
